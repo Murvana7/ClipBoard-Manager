@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Clipboard Manager</title>
+<style>
+  :root{
+    --bg:#070b14;
+    --panel:rgba(255,255,255,.06);
+    --border:rgba(255,255,255,.12);
+    --text:#eaf0ff;
+    --muted:rgba(234,240,255,.72);
+    --acc:#38bdf8;
+    --acc2:#60a5fa;
+    --r:18px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    color:var(--text);
+    background:
+      radial-gradient(1200px 650px at 18% -10%, rgba(56,189,248,.28), transparent 60%),
+      radial-gradient(900px 600px at 90% 10%, rgba(96,165,250,.18), transparent 55%),
+      var(--bg);
+  }
+  .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
+  header{display:flex;gap:14px;align-items:flex-end;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap}
+  h1{margin:0;font-size:28px}
+  .sub{margin:6px 0 0;color:var(--muted)}
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:12px;padding:7px 10px;border-radius:999px;
+    border:1px solid var(--border);color:var(--muted);background:rgba(255,255,255,.04)
+  }
+
+  .grid{display:grid;grid-template-columns: 1fr 1.2fr;gap:14px}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--r);
+    padding:16px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.25);
+  }
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .grow{flex:1}
+  input, textarea, select, button{
+    border-radius:12px;
+    border:1px solid var(--border);
+    background:rgba(255,255,255,.04);
+    color:var(--text);
+    padding:10px 12px;
+    outline:none;
+    font:inherit;
+  }
+  textarea{width:100%;min-height:140px;resize:vertical;line-height:1.35}
+  input, select{width:100%}
+  button{cursor:pointer}
+  button.primary{
+    border:none;
+    background:linear-gradient(90deg, rgba(56,189,248,.92), rgba(96,165,250,.92));
+    color:#071019;
+    font-weight:700;
+  }
+  button.ghost{
+    background:transparent;
+  }
+  button:active{transform:translateY(1px)}
+  .hint{color:var(--muted);font-size:13px;margin-top:10px;line-height:1.5}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .toolbar input{max-width:360px}
+  .toolbar select{max-width:220px}
+
+  .list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+  .item{
+    border-radius:16px;
+    border:1px solid var(--border);
+    background:rgba(0,0,0,.18);
+    padding:12px;
+  }
+  .topline{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap
+  }
+  .title{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap
+  }
+  .badge{
+    font-size:11px;padding:4px 8px;border-radius:999px;
+    border:1px solid var(--border);
+    color:var(--muted);
+  }
+  .badge.pin{border-color:rgba(56,189,248,.45);color:#bfeaff}
+  .meta{color:var(--muted);font-size:12px}
+  .text{
+    margin-top:10px;
+    white-space:pre-wrap;
+    word-break:break-word;
+    line-height:1.4;
+  }
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .actions button{padding:8px 10px}
+
+  .toast{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+    background:rgba(0,0,0,.65);
+    border:1px solid rgba(255,255,255,.16);
+    color:var(--text);
+    padding:10px 12px;border-radius:999px;
+    opacity:0;pointer-events:none;
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  .danger{border-color:rgba(255,120,120,.45)}
+  .small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Clipboard Manager</h1>
+      <div class="sub">Save snippets • tags • pin • search • export/import • localStorage</div>
+    </div>
+    <div class="row">
+      <span class="pill" id="stats">0 saved</span>
+      <span class="pill">Shortcut: <b>Ctrl</b> + <b>Enter</b> to Save</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: Add / Import / Export -->
+    <section class="card">
+      <h3 style="margin:0 0 10px">Add snippet</h3>
+
+      <label class="small">Text</label>
+      <textarea id="text" placeholder="Paste or type anything here…"></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <div class="grow">
+          <label class="small">Tags (comma separated)</label>
+          <input id="tags" placeholder="e.g., css, api, snippet">
+        </div>
+        <div style="min-width:160px">
+          <label class="small">Pin</label>
+          <select id="pin">
+            <option value="no">Not pinned</option>
+            <option value="yes">Pinned</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="primary grow" id="saveBtn">Save</button>
+        <button class="ghost" id="pasteBtn">Paste from Clipboard</button>
+        <button class="ghost danger" id="clearAllBtn" title="Deletes everything">Clear all</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+
+      <h3 style="margin:0 0 10px">Backup</h3>
+      <div class="row">
+        <button class="ghost" id="exportBtn">Export JSON</button>
+        <button class="ghost" id="importBtn">Import JSON</button>
+        <input type="file" id="file" accept="application/json" hidden>
+      </div>
+
+      <p class="hint">
+        Notes:
+        <br>• Clipboard read requires a secure context (HTTPS or localhost).
+        <br>• Everything saves in your browser via <b>localStorage</b>.
+      </p>
+    </section>
+
+    <!-- RIGHT: List + Search -->
+    <section class="card">
+      <div class="toolbar">
+        <input id="search" class="grow" placeholder="Search text or tags…">
+        <select id="filter">
+          <option value="all">All</option>
+          <option value="pinned">Pinned</option>
+          <option value="unpinned">Unpinned</option>
+        </select>
+        <select id="sort">
+          <option value="new">Newest</option>
+          <option value="old">Oldest</option>
+          <option value="az">A → Z</option>
+        </select>
+      </div>
+
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+
+  const KEY = "clipboard_manager_v1";
+  let items = load();
+
+  // UI refs
+  const textEl = $("#text");
+  const tagsEl = $("#tags");
+  const pinEl = $("#pin");
+  const listEl = $("#list");
+  const statsEl = $("#stats");
+  const searchEl = $("#search");
+  const filterEl = $("#filter");
+  const sortEl = $("#sort");
+  const toastEl = $("#toast");
+  const fileEl = $("#file");
+
+  // Helpers
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch{
+      return [];
+    }
+  }
+  function save(){
+    localStorage.setItem(KEY, JSON.stringify(items));
+  }
+  function nowISO(){
+    return new Date().toISOString();
+  }
+  function formatDate(iso){
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit"});
+  }
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>toastEl.classList.remove("show"), 900);
+  }
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function normalizeTags(tagStr){
+    return tagStr
+      .split(",")
+      .map(t=>t.trim())
+      .filter(Boolean)
+      .map(t=>t.replace(/\s+/g," "))
+      .map(t=>t.toLowerCase());
+  }
+  function snippetTitle(text){
+    const t = text.trim().replace(/\s+/g," ");
+    return t.length <= 42 ? t : t.slice(0,42) + "…";
+  }
+
+  // CRUD
+  function addItem(){
+    const text = textEl.value.trim();
+    if(!text){ showToast("Nothing to save"); return; }
+    const tags = normalizeTags(tagsEl.value);
+    const pinned = (pinEl.value === "yes");
+
+    items.unshift({
+      id: crypto.randomUUID(),
+      text,
+      tags,
+      pinned,
+      createdAt: nowISO(),
+      updatedAt: nowISO()
+    });
+    save();
+    textEl.value="";
+    tagsEl.value="";
+    pinEl.value="no";
+    render();
+    showToast("Saved");
+  }
+
+  function delItem(id){
+    items = items.filter(x=>x.id !== id);
+    save(); render();
+    showToast("Deleted");
+  }
+
+  function togglePin(id){
+    const it = items.find(x=>x.id===id);
+    if(!it) return;
+    it.pinned = !it.pinned;
+    it.updatedAt = nowISO();
+    save(); render();
+    showToast(it.pinned ? "Pinned" : "Unpinned");
+  }
+
+  async function copyText(text){
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast("Copied");
+    }catch(e){
+      // fallback
+      const ta=document.createElement("textarea");
+      ta.value=text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      showToast("Copied");
+    }
+  }
+
+  function editItem(id){
+    const it = items.find(x=>x.id===id);
+    if(!it) return;
+
+    const newText = prompt("Edit text:", it.text);
+    if(newText === null) return;
+
+    const trimmed = newText.trim();
+    if(!trimmed){ showToast("Empty text not saved"); return; }
+
+    const newTags = prompt("Edit tags (comma separated):", (it.tags||[]).join(", "));
+    if(newTags === null) return;
+
+    it.text = trimmed;
+    it.tags = normalizeTags(newTags);
+    it.updatedAt = nowISO();
+    save(); render();
+    showToast("Updated");
+  }
+
+  // Render
+  function getView(){
+    const q = searchEl.value.trim().toLowerCase();
+    const filter = filterEl.value;
+    const sort = sortEl.value;
+
+    let view = [...items];
+
+    // filter pinned
+    if(filter === "pinned") view = view.filter(x=>x.pinned);
+    if(filter === "unpinned") view = view.filter(x=>!x.pinned);
+
+    // search text/tags
+    if(q){
+      view = view.filter(x=>{
+        const inText = x.text.toLowerCase().includes(q);
+        const inTags = (x.tags||[]).some(t=>t.includes(q));
+        return inText || inTags;
+      });
+    }
+
+    // sort
+    if(sort === "new") view.sort((a,b)=> (b.createdAt).localeCompare(a.createdAt));
+    if(sort === "old") view.sort((a,b)=> (a.createdAt).localeCompare(b.createdAt));
+    if(sort === "az") view.sort((a,b)=> a.text.localeCompare(b.text));
+
+    // always float pinned to top (unless specifically filtering unpinned)
+    if(filter !== "unpinned"){
+      view.sort((a,b)=> (b.pinned===a.pinned)?0:(b.pinned?1:-1));
+    }
+
+    return view;
+  }
+
+  function render(){
+    statsEl.textContent = `${items.length} saved • pinned ${items.filter(x=>x.pinned).length}`;
+
+    const view = getView();
+    listEl.innerHTML = "";
+
+    if(view.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "item";
+      empty.innerHTML = `
+        <div class="meta">No results.</div>
+        <div class="text">Save your first snippet on the left.</div>
+      `;
+      listEl.appendChild(empty);
+      return;
+    }
+
+    for(const it of view){
+      const el = document.createElement("div");
+      el.className = "item";
+
+      const title = escapeHtml(snippetTitle(it.text));
+      const tags = (it.tags||[]).map(t=>`<span class="badge">${escapeHtml(t)}</span>`).join(" ");
+      const pinBadge = it.pinned ? `<span class="badge pin">Pinned</span>` : "";
+
+      el.innerHTML = `
+        <div class="topline">
+          <div class="title">
+            ${pinBadge}
+            <b>${title}</b>
+            ${tags ? `<span class="meta">${tags}</span>` : `<span class="meta">No tags</span>`}
+          </div>
+          <div class="meta">Saved: ${formatDate(it.createdAt)}${it.updatedAt!==it.createdAt ? ` • Edited: ${formatDate(it.updatedAt)}` : ""}</div>
+        </div>
+
+        <div class="text">${escapeHtml(it.text)}</div>
+
+        <div class="topline" style="margin-top:12px">
+          <div class="actions">
+            <button class="primary" data-act="copy">Copy</button>
+            <button data-act="pin">${it.pinned ? "Unpin" : "Pin"}</button>
+            <button data-act="edit">Edit</button>
+            <button class="danger" data-act="del">Delete</button>
+          </div>
+          <div class="meta">Chars: ${it.text.length}</div>
+        </div>
+      `;
+
+      el.querySelector('[data-act="copy"]').onclick = () => copyText(it.text);
+      el.querySelector('[data-act="pin"]').onclick  = () => togglePin(it.id);
+      el.querySelector('[data-act="edit"]').onclick = () => editItem(it.id);
+      el.querySelector('[data-act="del"]').onclick  = () => {
+        if(confirm("Delete this snippet?")) delItem(it.id);
+      };
+
+      listEl.appendChild(el);
+    }
+  }
+
+  // Clipboard read (paste button)
+  async function pasteFromClipboard(){
+    try{
+      const t = await navigator.clipboard.readText();
+      if(!t){ showToast("Clipboard empty"); return; }
+      textEl.value = t;
+      showToast("Pasted");
+      textEl.focus();
+    }catch(e){
+      showToast("Clipboard blocked (use HTTPS/localhost)");
+    }
+  }
+
+  // Export/Import
+  function exportJSON(){
+    const data = JSON.stringify({version:1, exportedAt: nowISO(), items}, null, 2);
+    const blob = new Blob([data], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url;
+    a.download="clipboard-manager-backup.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Exported");
+  }
+
+  function importJSONFile(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const parsed = JSON.parse(reader.result);
+        const incoming = Array.isArray(parsed) ? parsed : (parsed.items || []);
+        if(!Array.isArray(incoming)) throw new Error("Invalid format");
+
+        // Basic validation + merge (keep newest on top)
+        const cleaned = incoming
+          .filter(x => x && typeof x.text === "string")
+          .map(x => ({
+            id: x.id || crypto.randomUUID(),
+            text: String(x.text),
+            tags: Array.isArray(x.tags) ? x.tags.map(t=>String(t).toLowerCase()) : [],
+            pinned: !!x.pinned,
+            createdAt: x.createdAt || nowISO(),
+            updatedAt: x.updatedAt || (x.createdAt || nowISO())
+          }));
+
+        // merge without duplicates by id
+        const map = new Map(items.map(x=>[x.id,x]));
+        for(const c of cleaned) map.set(c.id, c);
+        items = [...map.values()].sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+
+        save(); render();
+        showToast("Imported");
+      }catch(e){
+        alert("Import failed: invalid JSON format.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Events
+  $("#saveBtn").onclick = addItem;
+  $("#pasteBtn").onclick = pasteFromClipboard;
+  $("#exportBtn").onclick = exportJSON;
+  $("#importBtn").onclick = () => fileEl.click();
+  fileEl.onchange = () => {
+    const f = fileEl.files && fileEl.files[0];
+    if(f) importJSONFile(f);
+    fileEl.value="";
+  };
+
+  $("#clearAllBtn").onclick = () => {
+    if(!items.length){ showToast("Nothing to clear"); return; }
+    if(confirm("Delete ALL saved snippets? This cannot be undone.")){
+      items = [];
+      save(); render();
+      showToast("Cleared");
+    }
+  };
+
+  [searchEl, filterEl, sortEl].forEach(el => el.addEventListener("input", render));
+  [filterEl, sortEl].forEach(el => el.addEventListener("change", render));
+
+  // Ctrl+Enter to save
+  document.addEventListener("keydown", (e) => {
+    if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+      addItem();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
